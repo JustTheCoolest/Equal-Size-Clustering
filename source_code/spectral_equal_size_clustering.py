@@ -24,7 +24,7 @@ class SpectralEqualSizeClustering:
         equity_fraction (float): Equity fraction. Value in range (0,1] which decides how equal the clusters
                            could be. The higher the fraction, the more equal the clusters BUT the less
                            compact.
-        seed (int): Random seed generator.
+        seed (int): Seed for random generator.
 
     Attributes:
         first_clustering (data frame): Table containing the cluster labels of each point in the initialisation.
@@ -55,7 +55,7 @@ class SpectralEqualSizeClustering:
         self.first_total_cluster_dispersion = None  # total cluster dispersion.
 
         self.range_points = None
-        self.nn_df = None  # table of number of neighbors per point
+        self.nn_df = None  # table of self.nneighbors number of neighbors per point
         self.cneighbors = None  # Dictionary of cluster neighbors
 
         # Final results after equalization of clusters
@@ -123,7 +123,7 @@ class SpectralEqualSizeClustering:
         The cluster neighbors are selected based on a smaller number of neighbours
         because I don't want to get no neighboring clusters.
         The minimun number of nn to get cluster neighbors is 30. This choice is arbitrary.
-        Imputs:
+        Inputs:
             df: a table with points as index and a "label" column
         Returns:
             A dictionary of shape: {i: [neighbor clusters]}, i= 0,..,nclusters
