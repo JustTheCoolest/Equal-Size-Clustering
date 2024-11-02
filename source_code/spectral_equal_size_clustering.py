@@ -327,17 +327,15 @@ class EqualSizeClustering(BaseEstimator, ClassifierMixin):
             self.cneighbors = self._get_cluster_neighbors(self.first_clustering)
             self.cluster_equalization(dmatrix)
 
-        # return list(self.final_clustering.label.values)
-        return self
+        return list(self.final_clustering.label.values)
+        # return self
     
     def predict(self, X):
         """
         Predict the cluster for each sample
         """
-        try:
-            return list(self.final_clustering[X].values)
-        except:
-            raise ValueError("This is not actually a classifier. Pass only the elements that were used to fit the model.")
+            # raise ValueError("This is not actually a classifier. Pass only the elements that were used to fit the model.")
+        raise ValueError("Not implemented")
 
 class SpectralEqualSizeClustering:
 
@@ -363,6 +361,7 @@ class SpectralEqualSizeClustering:
 
         cl = EqualSizeClustering(nclusters=self.nclusters, nneighbors=self.nneighbors, equity_fraction=self.equity_fr,
                                  seed=self.seed)
-        cl.fit(X=dmatrix, y=initial_labels)
-        cluster_labels = cl.predict(dmatrix)
+        cluster_labels = cl.fit(X=dmatrix, y=initial_labels)
+        # cl.fit(X=dmatrix, y=initial_labels)
+        # cluster_labels = cl.predict(dmatrix)
         return cluster_labels
