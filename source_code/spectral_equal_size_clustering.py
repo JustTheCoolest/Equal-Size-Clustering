@@ -4,6 +4,7 @@ Module containing the Spectral Equal Size Clustering method
 import numpy as np
 import pandas as pd
 from sklearn.cluster import SpectralClustering
+from sklearn.base import BaseEstimator, ClassifierMixin
 import logging
 import math
 
@@ -11,7 +12,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-class SpectralEqualSizeClustering:
+class EqualSizeClustering(BaseEstimator, ClassifierMixin):
     """
     Uses spectral clustering to obtain an initial configuration of clusters.
     This configuration is compact but NOT equal-sized. To make clusters equal-sized (in number of points),
@@ -48,7 +49,6 @@ class SpectralEqualSizeClustering:
         self.nclusters = nclusters
         self.equity_fr = equity_fraction
         self.nneighbors = nneighbors
-        self.seed = seed
 
         self.first_clustering = None
         self.first_cluster_dispersion = None  # A table with each cluster dispersion (in distance)
@@ -202,19 +202,7 @@ class SpectralEqualSizeClustering:
         cdistances = cdistances.sort_values(by="distance", ascending=True).set_index("points")
         return cdistances
 
-    def cluster_initialization(self, dist_matrix):
-        """
-        Uses Spectral clustering to get initial cluster configurations. These clusters
-        are imbalanced.
-        """
-        # discretize is less sensitive to random initialization.
-        initial_clustering = SpectralClustering(n_clusters=self.nclusters,
-                                                assign_labels="discretize",
-                                                n_neighbors=self.nneighbors,
-                                                affinity="precomputed_nearest_neighbors",
-                                                random_state=self.seed)
-        initial_clustering.fit(dist_matrix)
-        initial_labels = initial_clustering.labels_
+    def cluster_initialization(self, dist_matrix, initial_labels):
         self.first_clustering = pd.DataFrame(initial_labels, columns=["label"])
         self.first_cluster_dispersion = self._cluster_dispersion(dist_matrix, self.first_clustering)
         self.first_total_cluster_dispersion = self.first_cluster_dispersion["cdispersion"].sum()
@@ -314,11 +302,13 @@ class SpectralEqualSizeClustering:
 
         return None
 
-    def fit(self, dmatrix):
+    def fit(self, X, y):
         """
         Main function to carry out the equal size clustering.
         """
 
+        dmatrix = X
+        initial_labels = y
         logging.info(
             f"parameters of the cluster: nclusters: {self.nclusters,} "
             f"equity_fr: {self.equity_fr} nneighbours: {self.nneighbors}")
@@ -333,8 +323,45 @@ class SpectralEqualSizeClustering:
             raise ValueError("Incorrect number of clusters. It should be higher or equal than 2.")
 
         else:
-            self.cluster_initialization(dmatrix)
+            self.cluster_initialization(dmatrix, initial_labels)
             self.cneighbors = self._get_cluster_neighbors(self.first_clustering)
             self.cluster_equalization(dmatrix)
 
-        return list(self.final_clustering.label.values)
+        # return list(self.final_clustering.label.values)
+        return self
+    
+    def predict(self, X):
+        """
+        Predict the cluster for each sample
+        """
+        try:
+            return list(self.final_clustering[X].values)
+        except:
+            raise ValueError("This is not actually a classifier. Pass only the elements that were used to fit the model.")
+
+class SpectralEqualSizeClustering:
+
+    def __init__(self, nclusters: int = None, nneighbors: int = None, equity_fraction=0.3, seed=None):
+        self.nclusters = nclusters
+        self.equity_fr = equity_fraction
+        self.nneighbors = nneighbors
+        self.seed = seed
+
+    def fit(self, dmatrix):
+        """
+        Uses Spectral clustering to get initial cluster configurations. These clusters
+        are imbalanced.
+        """
+        # discretize is less sensitive to random initialization.
+        initial_clustering = SpectralClustering(n_clusters=self.nclusters,
+                                                assign_labels="discretize",
+                                                n_neighbors=self.nneighbors,
+                                                affinity="precomputed_nearest_neighbors",
+                                                random_state=self.seed)
+        initial_clustering.fit(dmatrix)
+        initial_labels = initial_clustering.labels_
+
+        cl = EqualSizeClustering(nclusters=self.nclusters, nneighbors=self.nneighbors, equity_fraction=self.equity_fr,
+                                 seed=self.seed)
+        cluster_labels = cl.fit(X=dmatrix, y=initial_labels)
+        return cluster_labels
