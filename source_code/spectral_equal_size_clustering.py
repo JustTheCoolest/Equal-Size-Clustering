@@ -363,5 +363,6 @@ class SpectralEqualSizeClustering:
 
         cl = EqualSizeClustering(nclusters=self.nclusters, nneighbors=self.nneighbors, equity_fraction=self.equity_fr,
                                  seed=self.seed)
-        cluster_labels = cl.fit(X=dmatrix, y=initial_labels)
+        cl.fit(X=dmatrix, y=initial_labels)
+        cluster_labels = cl.predict(dmatrix)
         return cluster_labels
