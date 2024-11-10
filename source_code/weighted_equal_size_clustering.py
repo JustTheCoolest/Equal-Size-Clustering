@@ -32,12 +32,17 @@ class WeightedEqualSizeClustering:
         self.batch_size = batch_size
 
     @staticmethod
+    def _current_elements_per_cluster(clustering, weights):
+        clusters = clustering.label.unique().tolist()
+        return [weights[clustering[clustering.label == c].index].sum() for c in clusters]
+
+    @staticmethod
     def _get_clusters_outside_range(clustering, weights, minr, maxr):
         clusters = clustering.label.unique().tolist() # assuming unique() and value_coutns() use the same sequence
 
         csizes = pd.DataFrame({
             "cluster": clusters,
-            "npoints": [weights[clustering[clustering.label == c].index].sum() for c in clusters]
+            "npoints": WeightedEqualSizeClustering._current_elements_per_cluster(clustering, weights)
         })
 
         large_c = list(csizes[csizes.npoints > maxr]["cluster"].values)
