@@ -41,6 +41,8 @@ logging.info(f"Points per regular cluster: \n {coords.regular_cluster.value_coun
 initial_clustering = KMeans(n_clusters=6, random_state=101)
 initial_clustering.fit(coords[["latitude", "longitude"]])
 initial_labels = initial_clustering.labels_
+coords["kmeans_cluster"] = initial_labels
+logging.info(f"Points per kmeans cluster: \n {coords.kmeans_cluster.value_counts()}")
 
 # Weighted Equal Size Clustering
 weighted_equal_size_clustering = WeightedEqualSizeClustering(nclusters=6,
@@ -64,6 +66,15 @@ regular_clusters_figure = visualise_clusters(coords,
                                              label_col="regular_cluster",
                                              zoom=11)
 regular_clusters_figure.show()
+
+# KMeans Clustering Visualization
+kmeasn_clusters_figure = visualise_clusters(coords,
+                                                         longitude_colname="longitude",
+                                                         latitude_colname="latitude",
+                                                         label_col="kmeans_cluster",
+                                                         zoom=11)
+kmeasn_clusters_figure.show()
+
 
 # Weighted Equal Size Clustering Visualization
 weighted_equal_size_clusters_figure = visualise_clusters(coords,

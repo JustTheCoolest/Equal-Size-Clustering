@@ -93,12 +93,12 @@ class WeightedEqualSizeClustering:
         cdistances = cdistances.sort_values(by="distance", ascending=True).set_index("points")
         return cdistances
 
-    def _iterate_equalization(self, dmatrix, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, thresholds):
+    def _iterate_equalization(self, dmatrix, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, threshold):
         def validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
             weight = weights[point]
-            if (current_elements_per_cluster[current_label] - weight) < thresholds[current_label]:
+            if current_elements_per_cluster[current_label] - weight < threshold:
                 return False
-            if current_elements_per_cluster[new_label] + weight > thresholds[new_label]:
+            if current_elements_per_cluster[new_label] + weight > threshold:
                 return False
             clustering.loc[point, "label"] = new_label
             current_elements_per_cluster[current_label] -= weight
