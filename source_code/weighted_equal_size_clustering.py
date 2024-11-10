@@ -23,6 +23,21 @@ class WeightedEqualSizeClustering:
         self.max_steal_iter = max_steal_iter
         self.batch_size = batch_size
 
+    def _iterate_equalization(self, dmatrix, weights, clustering, elements_per_cluster, larger_clusters, smaller_clusters, validate_and_switch):
+        lnx = {c: list(clustering[clustering.label == c].index) for c in larger_clusters}
+        snx = {c: list(clustering[clustering.label == c].index) for c in smaller_clusters}
+        closest_distance = self._get_points_to_switch(dmatrix, weights, lnx, smaller_clusters, snx)
+        
+        batch_size = self.batch_size
+        for point in list(closest_distance.index):
+            if batch_size <= 0:
+                break
+            new_label = closest_distance.loc[point, "neighbor_c"]  # cluster that might receive the point
+            current_label = clustering.loc[point, "label"]
+            if not validate_and_switch(dmatrix, weights, clustering, current_label, new_label, point):
+                continue
+            batch_size -= weights[point]    
+
     def _iterate_expend_equalization(self, dmatrix, weights, clustering, elements_per_cluster, all_clusters, range_points):
         pass
     def cluster_equalization(self, dmatrix, weights, initial_labels):
