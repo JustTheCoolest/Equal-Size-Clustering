@@ -6,6 +6,7 @@ plots/.DS_Store
 plots/
 documentation/
 test/
+reference.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
