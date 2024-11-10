@@ -1,10 +1,14 @@
 import numpy as np
+import pandas as pd
 
 from source_code.spectral_equal_size_clustering import EqualSizeClustering
 
 class WeightedEqualSizeClustering:
     """
     Postprocessor to be applied after clustering. Designed in a model agnostic manner, but refer disclosures.
+
+    Architecture:
+    1. This class can inherit from EqualSizeClustering, as it's using its methods anyway.
 
     Disclosures:
     1. Developed primarily for my needs in KMeans clustering.
@@ -52,6 +56,12 @@ class WeightedEqualSizeClustering:
                 continue
             batch_size -= weights[point]    
 
+    def cluster_initialization(self, dist_matrix, initial_labels):
+        self.first_clustering = pd.DataFrame(initial_labels, columns=["label"])
+        # self.first_cluster_dispersion = self._cluster_dispersion(dist_matrix, self.first_clustering)
+        # self.first_total_cluster_dispersion = self.first_cluster_dispersion["cdispersion"].sum()
+
+
     def cluster_equalization(self, dmatrix, weights, initial_labels):
         npoints = weights.sum()
         optimal_elements_per_cluster = EqualSizeClustering._optimal_cluster_sizes(self.nclusters, npoints)
@@ -91,10 +101,18 @@ class WeightedEqualSizeClustering:
             )
 
         self.final_clustering = clustering
-        self.final_cluster_dispersion = self._cluster_dispersion(dmatrix, weights, self.final_clustering)
-        self.total_cluster_dispersion = self.final_cluster_dispersion["cdispersion"].sum(axis=0)
+        # self.final_cluster_dispersion = self._cluster_dispersion(dmatrix, weights, self.final_clustering)
+        # self.total_cluster_dispersion = self.final_cluster_dispersion["cdispersion"].sum(axis=0)
 
 
     def fit(self, dmatrix, weights, initial_labels):
-        # self.cluster_initialization(dmatrix, initial_labels)
+        if self.nclusters == np.shape(dmatrix)[0]:
+            raise Exception("Number of clusters equal to number of events.")
+
+        if self.nclusters <= 1:
+            raise ValueError("Incorrect number of clusters. It should be higher or equal than 2.")
+
+        self.cluster_initialization(dmatrix, weights, initial_labels)
         self.cluster_equalization(dmatrix, weights, initial_labels)
+
+        return list(self.final_clustering.label.values)
