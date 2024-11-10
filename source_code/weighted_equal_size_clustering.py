@@ -24,14 +24,29 @@ class WeightedEqualSizeClustering:
     1. There could be a case where the best action is for a large cluster A to donate to an okay cluster B, even though this donation makes B become a large cluster, if B can later donate another of its point to another cluster
     """
 
-    def __init__(self, equity_fraction=0.4, max_expend_iter=50, max_steal_iter=50, batch_size=10):
+    def __init__(self, nclusters, equity_fraction=0.4, max_expend_iter=50, max_steal_iter=50, batch_size=10):
+        self.nclusters = nclusters
         self.equity_fr = equity_fraction
         self.max_expend_iter = max_expend_iter
         self.max_steal_iter = max_steal_iter
         self.batch_size = batch_size
 
+    @staticmethod
+    def _get_clusters_outside_range(clustering, weights, minr, maxr):
+        clusters = clustering.label.unique().tolist() # assuming unique() and value_coutns() use the same sequence
+
+        csizes = pd.DataFrame({
+            "cluster": clusters,
+            "npoints": [weights[clustering[clustering.label == c].index].sum() for c in clusters]
+        })
+
+        large_c = list(csizes[csizes.npoints > maxr]["cluster"].values)
+        small_c = list(csizes[csizes.npoints < minr]["cluster"].values)
+
+        return large_c, small_c
+
     def _iterate_equalization(self, dmatrix, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, thresholds):
-        def validate_and_switch(dmatrix, weights, clustering, current_elements_per_cluster, current_label, new_label, point):
+        def validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
             weight = weights[point]
             if current_elements_per_cluster[current_label] - weight < thresholds[current_label]:
                 return False
@@ -52,7 +67,7 @@ class WeightedEqualSizeClustering:
                 break
             new_label = closest_distance.loc[point, "neighbor_c"]  # cluster that might receive the point
             current_label = clustering.loc[point, "label"]
-            if not validate_and_switch(dmatrix, weights, clustering, current_elements_per_cluster, current_label, new_label, point):
+            if not validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
                 continue
             batch_size -= weights[point]    
 
@@ -62,7 +77,7 @@ class WeightedEqualSizeClustering:
         # self.first_total_cluster_dispersion = self.first_cluster_dispersion["cdispersion"].sum()
 
 
-    def cluster_equalization(self, dmatrix, weights, initial_labels):
+    def cluster_equalization(self, dmatrix, weights):
         npoints = weights.sum()
         optimal_elements_per_cluster = EqualSizeClustering._optimal_cluster_sizes(self.nclusters, npoints)
         min_range = np.array(optimal_elements_per_cluster).min() * self.equity_fr
@@ -112,7 +127,7 @@ class WeightedEqualSizeClustering:
         if self.nclusters <= 1:
             raise ValueError("Incorrect number of clusters. It should be higher or equal than 2.")
 
-        self.cluster_initialization(dmatrix, weights, initial_labels)
-        self.cluster_equalization(dmatrix, weights, initial_labels)
+        self.cluster_initialization(dmatrix, initial_labels)
+        self.cluster_equalization(dmatrix, weights)
 
         return list(self.final_clustering.label.values)
