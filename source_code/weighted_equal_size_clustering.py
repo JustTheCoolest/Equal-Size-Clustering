@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import math
 
 from source_code.spectral_equal_size_clustering import SpectralEqualSizeClustering
 
@@ -40,17 +41,33 @@ class WeightedEqualSizeClustering:
             self.point_to_cluster_calculator = self._weighted_point_to_cluster
 
     @staticmethod
+    def _optimal_cluster_sizes(nclusters, npoints):
+        min_points, max_points = math.floor(npoints / float(nclusters)), math.floor(npoints / float(nclusters)) + 1
+        number_clusters_with_max_points = npoints % nclusters
+        number_clusters_with_min_points = nclusters - number_clusters_with_max_points
+
+        # print(npoints, nclusters, number_clusters_with_max_points)
+        assert number_clusters_with_max_points == int(number_clusters_with_max_points)
+        number_clusters_with_max_points = int(number_clusters_with_max_points)
+        assert number_clusters_with_min_points == int(number_clusters_with_min_points)
+        number_clusters_with_min_points = int(number_clusters_with_min_points)
+
+        list1 = list(max_points * np.ones(number_clusters_with_max_points).astype(int))
+        list2 = list(min_points * np.ones(number_clusters_with_min_points).astype(int))
+        return list1 + list2
+
+    @staticmethod
     def _current_elements_per_cluster(clustering, weights):
         clusters = clustering.label.unique()
-        return [weights[clustering[clustering.label == c].index].sum() for c in clusters]
-
+        return {c: weights[clustering[clustering.label == c].index].sum() for c in clusters}
+    
     @staticmethod
     def _get_clusters_outside_range(clustering, weights, minr, maxr):
         clusters = clustering.label.unique() # assuming unique() and value_counts() use the same sequence
 
         csizes = pd.DataFrame({
             "cluster": clusters,
-            "npoints": WeightedEqualSizeClustering._current_elements_per_cluster(clustering, weights)
+            "npoints": [weights[clustering[clustering.label == c].index].sum() for c in clusters]
         })
 
         large_c = list(csizes[csizes.npoints > maxr]["cluster"].values)
@@ -62,8 +79,7 @@ class WeightedEqualSizeClustering:
     def _weighted_point_to_cluster(dmatrix, weights, cluster, point):
         return (dmatrix[cluster, point] * weights[cluster]).mean()
 
-    def _get_points_to_switch(self, weights, dmatrix, cl_elements, clusters_to_modify, idxc):
-        centroids = self.get_centroids(dmatrix, weights, idxc)
+    def _get_points_to_switch(self, dmatrix, weights, cl_elements, clusters_to_modify, idxc):
         neighbor_cluster = []
         distances = []
         for point in cl_elements:
@@ -80,7 +96,7 @@ class WeightedEqualSizeClustering:
     def _iterate_equalization(self, dmatrix, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, thresholds):
         def validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
             weight = weights[point]
-            if current_elements_per_cluster[current_label] - weight < thresholds[current_label]:
+            if (current_elements_per_cluster[current_label] - weight) < thresholds[current_label]:
                 return False
             if current_elements_per_cluster[new_label] + weight > thresholds[new_label]:
                 return False
@@ -89,7 +105,7 @@ class WeightedEqualSizeClustering:
             current_elements_per_cluster[new_label] += weight
             return True
 
-        larger_cluster_points = clustering[clustering.label in larger_clusters].index
+        larger_cluster_points = clustering[clustering.label.isin(larger_clusters)].index
         snx = {c: list(clustering[clustering.label == c].index) for c in smaller_clusters}
         closest_distance = self._get_points_to_switch(dmatrix, weights, larger_cluster_points, smaller_clusters, snx)
 
@@ -111,7 +127,7 @@ class WeightedEqualSizeClustering:
 
     def cluster_equalization(self, dmatrix, weights):
         npoints = weights.sum()
-        optimal_elements_per_cluster = SpectralEqualSizeClustering._optimal_cluster_sizes(self.nclusters, npoints)
+        optimal_elements_per_cluster = self._optimal_cluster_sizes(self.nclusters, npoints)
         min_range = np.array(optimal_elements_per_cluster).min() * self.equity_fr
         max_range = np.array(optimal_elements_per_cluster).max() * self.equity_fr
         self.range_points = (min_range, max_range)
