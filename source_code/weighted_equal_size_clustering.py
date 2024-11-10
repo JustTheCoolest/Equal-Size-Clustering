@@ -8,7 +8,8 @@ class WeightedEqualSizeClustering:
     Postprocessor to be applied after clustering. Designed in a model agnostic manner, but refer disclosures.
 
     Architecture:
-    1. This class can inherit from EqualSizeClustering, as it's using its methods anyway.
+    1. This class can inherit from EqualSizeClustering, as it's using its methods anyway. 
+        Solution: Better work on this class alone with full dedication, as the original repo is not maintained
 
     Disclosures:
     1. Developed primarily for my needs in KMeans clustering.
@@ -22,23 +23,30 @@ class WeightedEqualSizeClustering:
 
     Edge Cases:
     1. There could be a case where the best action is for a large cluster A to donate to an okay cluster B, even though this donation makes B become a large cluster, if B can later donate another of its point to another cluster
+
+    Future Improvements:
+    1. If we have access to the points itself, we can cache the centroids instead of having to calculate from the dmatrix each time.
     """
 
-    def __init__(self, nclusters, equity_fraction=0.4, max_expend_iter=50, max_steal_iter=50, batch_size=10):
+    def __init__(self, nclusters, equity_fraction=0.4, max_expend_iter=50, max_steal_iter=50, batch_size=10, point_to_cluster_calculator=None):
         self.nclusters = nclusters
         self.equity_fr = equity_fraction
         self.max_expend_iter = max_expend_iter
         self.max_steal_iter = max_steal_iter
         self.batch_size = batch_size
 
+        self.point_to_cluster_calculator = point_to_cluster_calculator
+        if self.point_to_cluster_calculator is None:
+            self.point_to_cluster_calculator = self._weighted_point_to_cluster
+
     @staticmethod
     def _current_elements_per_cluster(clustering, weights):
-        clusters = clustering.label.unique().tolist()
+        clusters = clustering.label.unique()
         return [weights[clustering[clustering.label == c].index].sum() for c in clusters]
 
     @staticmethod
     def _get_clusters_outside_range(clustering, weights, minr, maxr):
-        clusters = clustering.label.unique().tolist() # assuming unique() and value_coutns() use the same sequence
+        clusters = clustering.label.unique() # assuming unique() and value_counts() use the same sequence
 
         csizes = pd.DataFrame({
             "cluster": clusters,
@@ -49,6 +57,25 @@ class WeightedEqualSizeClustering:
         small_c = list(csizes[csizes.npoints < minr]["cluster"].values)
 
         return large_c, small_c
+    
+    @staticmethod
+    def _weighted_point_to_cluster(dmatrix, weights, cluster, point):
+        return (dmatrix[cluster, point] * weights[cluster]).mean()
+
+    def _get_points_to_switch(self, weights, dmatrix, cl_elements, clusters_to_modify, idxc):
+        centroids = self.get_centroids(dmatrix, weights, idxc)
+        neighbor_cluster = []
+        distances = []
+        for point in cl_elements:
+            # dist = {c: dmatrix[idxc[c], point].mean() for c in clusters_to_modify}  # Instead of min. Worth future inv.
+            dist = {c: self.point_to_cluster_calculator(dmatrix, weights, idxc[c], point) for c in clusters_to_modify}
+            new_label = min(dist, key=dist.get)  # closest cluster
+            neighbor_cluster.append(new_label)
+            distances.append(dist[new_label])
+
+        cdistances = pd.DataFrame({"points": cl_elements, "neighbor_c": neighbor_cluster, "distance": distances})
+        cdistances = cdistances.sort_values(by="distance", ascending=True).set_index("points")
+        return cdistances
 
     def _iterate_equalization(self, dmatrix, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, thresholds):
         def validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
@@ -62,9 +89,9 @@ class WeightedEqualSizeClustering:
             current_elements_per_cluster[new_label] += weight
             return True
 
-        lnx = {c: list(clustering[clustering.label == c].index) for c in larger_clusters}
+        larger_cluster_points = clustering[clustering.label in larger_clusters].index
         snx = {c: list(clustering[clustering.label == c].index) for c in smaller_clusters}
-        closest_distance = self._get_points_to_switch(dmatrix, weights, lnx, smaller_clusters, snx)
+        closest_distance = self._get_points_to_switch(dmatrix, weights, larger_cluster_points, smaller_clusters, snx)
 
         batch_size = self.batch_size
         for point in list(closest_distance.index):
