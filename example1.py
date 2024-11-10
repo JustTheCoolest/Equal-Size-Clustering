@@ -7,7 +7,8 @@ import numpy as np
 import logging
 from source_code.spectral_equal_size_clustering import SpectralEqualSizeClustering
 from source_code.visualisation import visualise_clusters
-from sklearn.cluster import SpectralClustering
+from sklearn.cluster import SpectralClustering, KMeans
+from source_code.weighted_equal_size_clustering import WeightedEqualSizeClustering
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -37,6 +38,16 @@ regular_labels = spectral_clustering.fit_predict(dist_tr)
 coords["regular_cluster"] = regular_labels
 logging.info(f"Points per regular cluster: \n {coords.regular_cluster.value_counts()}")
 
+initial_clustering = KMeans(n_clusters=6, random_state=101)
+initial_clustering.fit(coords[["latitude", "longitude"]])
+initial_labels = initial_clustering.labels_
+
+# Weighted Equal Size Clustering
+weighted_equal_size_clustering = WeightedEqualSizeClustering(nclusters=6,
+                                                             equity_fraction=1)
+weighted_equal_size_labels = weighted_equal_size_clustering.fit(dist_tr, np.ones(initial_labels.shape[0]), initial_labels)
+coords["weighted_equal_size_cluster"] = weighted_equal_size_labels
+logging.info(f"Points per weighted equal size cluster: \n {coords.weighted_equal_size_cluster.value_counts()}")
 
 # Equal Size Clustering Visualization
 equal_size_clusters_figure = visualise_clusters(coords,
@@ -53,3 +64,11 @@ regular_clusters_figure = visualise_clusters(coords,
                                              label_col="regular_cluster",
                                              zoom=11)
 regular_clusters_figure.show()
+
+# Weighted Equal Size Clustering Visualization
+weighted_equal_size_clusters_figure = visualise_clusters(coords,
+                                                         longitude_colname="longitude",
+                                                         latitude_colname="latitude",
+                                                         label_col="weighted_equal_size_cluster",
+                                                         zoom=11)
+weighted_equal_size_clusters_figure.show()

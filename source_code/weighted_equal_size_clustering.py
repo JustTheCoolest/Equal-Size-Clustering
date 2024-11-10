@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from source_code.spectral_equal_size_clustering import EqualSizeClustering
+from source_code.spectral_equal_size_clustering import SpectralEqualSizeClustering
 
 class WeightedEqualSizeClustering:
     """
@@ -111,7 +111,7 @@ class WeightedEqualSizeClustering:
 
     def cluster_equalization(self, dmatrix, weights):
         npoints = weights.sum()
-        optimal_elements_per_cluster = EqualSizeClustering._optimal_cluster_sizes(self.nclusters, npoints)
+        optimal_elements_per_cluster = SpectralEqualSizeClustering._optimal_cluster_sizes(self.nclusters, npoints)
         min_range = np.array(optimal_elements_per_cluster).min() * self.equity_fr
         max_range = np.array(optimal_elements_per_cluster).max() * self.equity_fr
         self.range_points = (min_range, max_range)
