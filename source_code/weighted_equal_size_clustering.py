@@ -29,7 +29,7 @@ class WeightedEqualSizeClustering:
     1. If we have access to the points itself, we can cache the centroids instead of having to calculate from the dmatrix each time.
     """
 
-    def __init__(self, nclusters, equity_fraction=0.4, max_expend_iter=50, max_steal_iter=50, batch_size=10, point_to_cluster_calculator=None):
+    def __init__(self, nclusters, equity_fraction=0.4, max_expend_iter=50, max_steal_iter=50, batch_size=10, point_to_cluster_calculator=None, centroid_calculator=None):
         self.nclusters = nclusters
         self.equity_fr = equity_fraction
         self.max_expend_iter = max_expend_iter
@@ -39,6 +39,10 @@ class WeightedEqualSizeClustering:
         self.point_to_cluster_calculator = point_to_cluster_calculator
         if self.point_to_cluster_calculator is None:
             self.point_to_cluster_calculator = self._weighted_point_to_cluster
+        
+        self.centroid_calculator = centroid_calculator
+        if self.centroid_calculator is None:
+            self.centroid_calculator = self._calculate_centroid
 
     @staticmethod
     def _optimal_cluster_sizes(nclusters, npoints):
@@ -76,15 +80,40 @@ class WeightedEqualSizeClustering:
         return large_c, small_c
     
     @staticmethod
-    def _weighted_point_to_cluster(dmatrix, weights, cluster, point):
-        return (dmatrix[cluster, point] * weights[cluster]).mean()
+    def _calculate_centroid(X, weights, idxc):
+        selected_X = X.iloc[idxc]
+        selected_weights = weights[idxc]
+        selected_weights_2d = selected_weights[:, np.newaxis]
+        weighted_X = selected_X * selected_weights_2d
+        weighted_sum = weighted_X.sum(axis=0)
+        total_weight = selected_weights.sum()
+        centroid = weighted_sum / total_weight        
+        return centroid
+    
+    def _calculate_centroids(self, X, weights, clusters, idxc):
+        return {c: self.centroid_calculator(X, weights, idxc[c]) for c in clusters}
+    
+    @staticmethod
+    def _weighted_point_to_cluster(X, weights, cluster, point, centroid):
+        return np.sqrt(((X.iloc[point] - centroid) ** 2).sum())
+    
+    def _get_weighted_distances(self, X, weights, idxc, point, centroids, clusters):
+        dist = {}
+        for c in clusters:
+            idxc_c = idxc[c]
+            centroid_c = centroids[c]
+            distance = self.point_to_cluster_calculator(X, weights, idxc_c, point, centroid_c)
+            dist[c] = distance
+        return dist
 
-    def _get_points_to_switch(self, dmatrix, weights, cl_elements, clusters_to_modify, idxc):
+    def _get_points_to_switch(self, X, weights, cl_elements, clusters_to_modify, idxc):
+        centroids = self._calculate_centroids(X, weights, clusters_to_modify, idxc)
+
         neighbor_cluster = []
         distances = []
         for point in cl_elements:
-            # dist = {c: dmatrix[idxc[c], point].mean() for c in clusters_to_modify}  # Instead of min. Worth future inv.
-            dist = {c: self.point_to_cluster_calculator(dmatrix, weights, idxc[c], point) for c in clusters_to_modify}
+            # Weight of point doesn't affect its chance of being moved
+            dist = self._get_weighted_distances(X, weights, idxc, point, centroids, clusters_to_modify)
             new_label = min(dist, key=dist.get)  # closest cluster
             neighbor_cluster.append(new_label)
             distances.append(dist[new_label])
@@ -93,9 +122,10 @@ class WeightedEqualSizeClustering:
         cdistances = cdistances.sort_values(by="distance", ascending=True).set_index("points")
         return cdistances
 
-    def _iterate_equalization(self, dmatrix, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, threshold):
+    def _iterate_equalization(self, X, weights, clustering, current_elements_per_cluster, larger_clusters, smaller_clusters, threshold):
         def validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
             weight = weights[point]
+            # note: recheck edge case logic
             if current_elements_per_cluster[current_label] - weight < threshold:
                 return False
             if current_elements_per_cluster[new_label] + weight > threshold:
@@ -107,7 +137,7 @@ class WeightedEqualSizeClustering:
 
         larger_cluster_points = clustering[clustering.label.isin(larger_clusters)].index
         snx = {c: list(clustering[clustering.label == c].index) for c in smaller_clusters}
-        closest_distance = self._get_points_to_switch(dmatrix, weights, larger_cluster_points, smaller_clusters, snx)
+        closest_distance = self._get_points_to_switch(X, weights, larger_cluster_points, smaller_clusters, snx)
 
         batch_size = self.batch_size
         for point in list(closest_distance.index):
@@ -121,11 +151,12 @@ class WeightedEqualSizeClustering:
 
     def cluster_initialization(self, dist_matrix, initial_labels):
         self.first_clustering = pd.DataFrame(initial_labels, columns=["label"])
+        self.clusters_index = self.first_clustering.label.unique()
         # self.first_cluster_dispersion = self._cluster_dispersion(dist_matrix, self.first_clustering)
         # self.first_total_cluster_dispersion = self.first_cluster_dispersion["cdispersion"].sum()
 
 
-    def cluster_equalization(self, dmatrix, weights):
+    def cluster_equalization(self, X, weights):
         npoints = weights.sum()
         optimal_elements_per_cluster = self._optimal_cluster_sizes(self.nclusters, npoints)
         min_range = np.array(optimal_elements_per_cluster).min() * self.equity_fr
@@ -141,7 +172,7 @@ class WeightedEqualSizeClustering:
 
         current_elements_per_cluster = self._current_elements_per_cluster(clustering, weights)
 
-        common_args = (dmatrix, weights, clustering, current_elements_per_cluster)
+        common_args = (X, weights, clustering, current_elements_per_cluster)
 
         for _ in range(self.max_expend_iter):
             larger_clusters = large_clusters
@@ -164,18 +195,18 @@ class WeightedEqualSizeClustering:
             )
 
         self.final_clustering = clustering
-        # self.final_cluster_dispersion = self._cluster_dispersion(dmatrix, weights, self.final_clustering)
+        # self.final_cluster_dispersion = self._cluster_dispersion(X, weights, self.final_clustering)
         # self.total_cluster_dispersion = self.final_cluster_dispersion["cdispersion"].sum(axis=0)
 
 
-    def fit(self, dmatrix, weights, initial_labels):
-        if self.nclusters == np.shape(dmatrix)[0]:
+    def fit(self, X, weights, initial_labels):
+        if self.nclusters == np.shape(X)[0]:
             raise Exception("Number of clusters equal to number of events.")
 
         if self.nclusters <= 1:
             raise ValueError("Incorrect number of clusters. It should be higher or equal than 2.")
 
-        self.cluster_initialization(dmatrix, initial_labels)
-        self.cluster_equalization(dmatrix, weights)
+        self.cluster_initialization(X, initial_labels)
+        self.cluster_equalization(X, weights)
 
         return list(self.final_clustering.label.values)
