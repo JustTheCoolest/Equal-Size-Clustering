@@ -51,6 +51,8 @@ logging.info(f"Points per kmeans cluster: \n {coords.kmeans_cluster.value_counts
 # Weighted Equal Size Clustering
 weighted_equal_size_clustering = WeightedEqualSizeClustering(nclusters=6,
                                                              equity_fraction=1,
+                                                             max_expend_iter= 10,
+                                                             max_steal_iter= 10
                                                              )
 weighted_equal_size_labels = weighted_equal_size_clustering.fit(coords, np.ones(initial_labels.shape[0]), initial_labels)
 coords["weighted_equal_size_cluster"] = weighted_equal_size_labels
@@ -88,3 +90,6 @@ weighted_equal_size_clusters_figure = visualise_clusters(coords,
                                                          label_col="weighted_equal_size_cluster",
                                                          zoom=11)
 weighted_equal_size_clusters_figure.show()
+
+print("Centroids: ")
+print(weighted_equal_size_clustering.final_centroids)

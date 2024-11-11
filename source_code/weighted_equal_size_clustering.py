@@ -209,4 +209,6 @@ class WeightedEqualSizeClustering:
         self.cluster_initialization(X, initial_labels)
         self.cluster_equalization(X, weights)
 
+        self.final_centroids = self._calculate_centroids(X, weights, self.clusters_index, {c: list(self.final_clustering[self.final_clustering.label == c].index) for c in self.clusters_index}).values()
+
         return list(self.final_clustering.label.values)
