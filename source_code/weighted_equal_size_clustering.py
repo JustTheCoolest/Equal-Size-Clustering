@@ -21,6 +21,7 @@ class WeightedEqualSizeClustering:
 
     Tasks:
     1. Attempt hacking to force it to diverge. Have max_iter as a safeguard.
+    2. coords implementation seems to be running slower than dmatrix. Analyse time complexities.
 
     Edge Cases:
     1. There could be a case where the best action is for a large cluster A to donate to an okay cluster B, even though this donation makes B become a large cluster, if B can later donate another of its point to another cluster
@@ -81,7 +82,7 @@ class WeightedEqualSizeClustering:
     
     @staticmethod
     def _calculate_centroid(X, weights, idxc):
-        selected_X = X.iloc[idxc]
+        selected_X = X[idxc]
         selected_weights = weights[idxc]
         selected_weights_2d = selected_weights[:, np.newaxis]
         weighted_X = selected_X * selected_weights_2d
@@ -95,7 +96,7 @@ class WeightedEqualSizeClustering:
     
     @staticmethod
     def _weighted_point_to_cluster(X, weights, cluster, point, centroid):
-        return np.sqrt(((X.iloc[point] - centroid) ** 2).sum())
+        return np.sqrt(((X[point] - centroid) ** 2).sum())
     
     def _get_weighted_distances(self, X, weights, idxc, point, centroids, clusters):
         dist = {}
@@ -200,6 +201,10 @@ class WeightedEqualSizeClustering:
 
 
     def fit(self, X, weights, initial_labels):
+        if type(X) == pd.DataFrame:
+            X = X.to_numpy()
+        # CRITICAL FLAG: Document behaviour, and/or make it a preprocessing step for all the inputs in a logically correct manner
+
         if self.nclusters == np.shape(X)[0]:
             raise Exception("Number of clusters equal to number of events.")
 
