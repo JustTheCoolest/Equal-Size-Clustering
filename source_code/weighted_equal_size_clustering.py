@@ -127,9 +127,9 @@ class WeightedEqualSizeClustering:
         def validate_and_switch(weights, clustering, current_elements_per_cluster, current_label, new_label, point):
             weight = weights[point]
             # note: recheck edge case logic
-            if current_elements_per_cluster[current_label] - weight < threshold:
+            if current_elements_per_cluster[current_label] < threshold:
                 return False
-            if current_elements_per_cluster[new_label] + weight > threshold:
+            if current_elements_per_cluster[new_label] > threshold:
                 return False
             clustering.loc[point, "label"] = new_label
             current_elements_per_cluster[current_label] -= weight
